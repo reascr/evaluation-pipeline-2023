@@ -319,6 +319,7 @@ class PromptSourceTask(Task):
 
     def evaluation_docs(self) -> datasets.Dataset:
         """Returns the `dataset` split to be used for evaluation."""
+        #breakpoint()
         if self.has_test_docs():
             return self.test_docs()
         elif self.has_validation_docs():
@@ -508,6 +509,7 @@ class PromptSourceTask(Task):
             An iterable of `Request` objects.
         """
         requests = []
+        #breakpoint()
         if self.prompt_template is None:
             answer_choices_list = self.null_prompt_answer_choices(doc)
         else:
@@ -520,6 +522,7 @@ class PromptSourceTask(Task):
                 )
                 requests.append(ll_answer_choice)
         else:
+            #breakpoint()
             # If not, then this is a generation prompt.
             request_args = {
                 "stop_sequences": self.stop_sequences(),
@@ -568,7 +571,9 @@ class PromptSourceTask(Task):
                 raise ValueError(e)
 
             pred = answer_choices_list[np.argmax(results)]
+            
             out = {}
+            #breakpoint()
             metric_list = ["Accuracy"]  # TODO: CLI framework for specifying metrics
 
             if self.prompt_template:
@@ -590,6 +595,7 @@ class PromptSourceTask(Task):
                         else 0.0
                     )
             # TODO: Add metrics here.
+            #breakpoint()
         else:
             # If not, then this is a generation prompt.
             # NOTE: In the future, target will be a list of strings.
@@ -617,6 +623,7 @@ class PromptSourceTask(Task):
 
         # TODO: Wrap process results s.t. override impl do not
         # override the save examples.
+        #breakpoint()
         if self.save_examples:
             example = {
                 "pred": pred,

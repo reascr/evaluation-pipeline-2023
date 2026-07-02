@@ -150,6 +150,7 @@ class HuggingFaceAutoLM(TokenLM):
         self._max_length = max_length
         self._config = self.AUTO_CONFIG_CLASS.from_pretrained(
             pretrained,
+            #force_download=True,
             revision=revision + ("/" + subfolder if subfolder is not None else ""),
             trust_remote_code=trust_remote_code,
         )
@@ -404,7 +405,9 @@ class AutoCausalLM(HuggingFaceAutoLM):
     def _model_call(
         self, inputs: TokenSequence, labels: Optional[TokenSequence] = None
     ) -> TokenSequence:
-        return self.model(inputs)["logits"]
+        logits = self.model(inputs)["logits"]
+        #breakpoint()
+        return logits
 
     def _model_generate(
         self,

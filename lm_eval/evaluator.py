@@ -146,6 +146,7 @@ def evaluate(
     set_seed(seed)
     rng = np.random.default_rng(seed)
 
+    #breakpoint()
     # TODO: Completely refactor this entire function to not be a huge mess, ideally breaking it down into smaller pieces
     task_dict = {}
     for task in tasks:
@@ -164,7 +165,7 @@ def evaluate(
     versions = collections.defaultdict(dict)
     requests = collections.defaultdict(list)
     requests_origin = collections.defaultdict(list)
-
+    #breakpoint()
     # TODO: We need unit tests & sanity checks or something to ensure that the return of `validation_docs` is stable
     docs = {}
 
@@ -173,9 +174,7 @@ def evaluate(
         task_docs = task.evaluation_docs()
 
         logger.info(f"\n» Assigning unique IDs to '{task_template_key}' docs")
-        task_docs = task_docs.map(
-            lambda ex, idx: {**ex, "doc_id": idx}, with_indices=True
-        )
+        task_docs = task_docs.map(lambda ex, idx: {**ex, "doc_id": idx}, with_indices=True)
 
         logger.info(f"\n» Filtering invalid docs from '{task_template_key}'")
         task_docs = task_docs.filter(lambda d: not task.invalid_doc_for_prompt(d))
@@ -207,7 +206,8 @@ def evaluate(
                 )
         # Store the task version.
         versions[task_template_key] = task.VERSION
-
+        #breakpoint()
+    
     # All responses for each (task, doc)
     process_response_queue = collections.defaultdict(list)
     # Execute each type of request
@@ -218,16 +218,22 @@ def evaluate(
         # could also implement some kind of auto-grouping here; they should
         # end up next to each other.
         logger.info(f"\n» Running all `{reqtype}` requests")
+        #breakpoint()
         resps = getattr(model, reqtype)([req.args for req in reqs])
+        #breakpoint()
         resps = [
             x if req.index is None else x[req.index] for x, req in zip(resps, reqs)
         ]
+        #breakpoint()
         for resp, (i, task_template_key, doc, doc_id, fewshotex_logging_info) in zip(
             resps, requests_origin[reqtype]
         ):
             process_response_queue[(task_template_key, doc_id)].append(
                 (i, resp, fewshotex_logging_info)
             )
+        #
+
+    #breakpoint()
 
     # Unpack results and sort back in order and return control to Task
     if predictions_path:
@@ -235,6 +241,7 @@ def evaluate(
     vals = collections.defaultdict(list)
     example_logger = logging.getLogger("examples")
     for (task_template_key, doc_id), per_doc_requests in process_response_queue.items():
+        #breakpoint()
         per_doc_requests.sort(key=lambda x: x[0])
         per_doc_results = [x[1] for x in per_doc_requests]
         fewshot_logging_info = [x[2] for x in per_doc_requests][0]

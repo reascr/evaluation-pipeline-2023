@@ -173,9 +173,11 @@ class TokenLM(LM):
             else:
                 context_enc = self.tok_encode(context)
             continuation_enc = self.tok_encode(continuation)
+
             new_requests.append(
                 ((context, continuation), context_enc, continuation_enc)
             )
+        #breakpoint()
         return self._loglikelihood_tokens(new_requests)
 
     def loglikelihood_rolling(self, requests: List[Tuple[str, str]]) -> List[float]:
@@ -265,12 +267,17 @@ class TokenLM(LM):
             # Because vectorizing is annoying, we first convert each (context, continuation) pair to padded
             # tensors, then we pack them together into a batch, call the model, and then pick it all apart
             # again because vectorizing is annoying
+
+
+            #SANITY CHECK TO ENSURE BATCH SIZE IS 1 becuase batching is not implemented in generate
+            assert len(chunk) == 1, "Batch size must be 1"
+
             for _, context_enc, continuation_enc in chunk:
                 # sanity check
                 assert len(context_enc) > 0
                 assert len(continuation_enc) > 0
                 assert len(continuation_enc) <= self.max_length
-
+                #breakpoint()
                 # How this all works:
                 #          CTX      CONT
                 # inp    0 1 2 3|4 5 6 7 8 9   <- last token is deleted by inp[:, :-1]
@@ -303,34 +310,44 @@ class TokenLM(LM):
                 )
                 inputs.append(input.unsqueeze(0))  # [1, padding_length]
                 cont_tokens_list.append(continuation_enc)
+                #breakpoint()
+                #cont_tokens_list.append(input)
                 input_lens.append(input_len)
-
+                
+                #breakpoint()
+            
             batched_inputs = torch.cat(inputs, dim=0)  # [batch, padding_length]
-            multi_logits = F.log_softmax(
-                self._model_call(batched_inputs), dim=-1
-            ).cpu()  # [batch, padding_length, vocab]
+            #breakpoint()
+            multi_logits_psoft = self._model_call(batched_inputs)
+            multi_logits = F.log_softmax(multi_logits_psoft, dim=-1).cpu()  # [batch, padding_length, vocab]
 
+            #breakpoint()
             for (cache_key, _, _), logits, input, input_len, cont_tokens in zip(
                 chunk, multi_logits, inputs, input_lens, cont_tokens_list
             ):
                 # Slice to original seq length
                 cont_len = len(cont_tokens)
                 # [1, seq, vocab]
+                #breakpoint()
                 logits = logits[input_len - cont_len : input_len].unsqueeze(0)
                 # Check if per-token argmax is exactly equal to continuation
                 greedy_tokens = logits.argmax(dim=-1)
+                #breakpoint()
                 # [1, seq]
                 cont_tokens = torch.tensor(cont_tokens, dtype=torch.long).unsqueeze(0)
+                #breakpoint()
                 max_equal = (greedy_tokens == cont_tokens).all()
 
                 # Obtain logprobs at the corresponding continuation token indices
                 # last_token_slice = logits[:, -1, :].squeeze(0).tolist()
                 # [1, seq]
                 logits = torch.gather(logits, 2, cont_tokens.unsqueeze(-1)).squeeze(-1)
+                #breakpoint()
                 # Answer: (log prob, is-exact-match)
                 answer = (float(logits.sum()), bool(max_equal))
                 # Partial caching
                 if cache_key is not None:
+                    #breakpoint()
                     self.cache_hook.add_partial("loglikelihood", cache_key, answer)
                 results.append(answer)
         return reorder.get_original(results)

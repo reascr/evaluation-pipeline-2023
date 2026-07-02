@@ -7,7 +7,7 @@ from lm_eval.api.model import LM
 from . import dummy
 from . import openai_completions
 from . import huggingface
-
+from . import nanogpt
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +18,7 @@ MODEL_API_REGISTRY = {
     "hf-mlm": huggingface.AutoMaskedLM,
     "openai": openai_completions.OpenAICompletionsLM,
     "dummy": dummy.DummyLM,
+    "nanogpt": nanogpt.NanoGPTLM
 }
 
 

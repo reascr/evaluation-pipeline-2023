@@ -11,6 +11,8 @@ class DummyLM(LM):
     def loglikelihood(
         self, requests: List[Tuple[str, str]]
     ) -> List[Tuple[float, bool]]:
+
+
         res = []
         for _ in requests:
             res.append((-random.random(), False))
