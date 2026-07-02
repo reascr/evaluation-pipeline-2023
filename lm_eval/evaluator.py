@@ -235,13 +235,71 @@ def evaluate(
 
     #breakpoint()
 
+    # if predictions_path:
+    #     preds = []
+    #     correctness = []
+    # vals = collections.defaultdict(list)
+    # example_logger = logging.getLogger("examples")
+
+    # # Pass tokenizer to all tasks
+    # #########################################################
+    # if hasattr(model, 'tokenizer'):
+    #     for task_key in task_dict:
+    #         task_dict[task_key].tokenizer = model.tokenizer
+    # #########################################################
+
+    # for (task_template_key, doc_id), per_doc_requests in process_response_queue.items():
+    #     #breakpoint()
+    #     per_doc_requests.sort(key=lambda x: x[0])
+    #     per_doc_results = [x[1] for x in per_doc_requests]
+    #     fewshot_logging_info = [x[2] for x in per_doc_requests][0]
+
+    #     task = task_dict[task_template_key]
+    #     doc = docs[(task_template_key, doc_id)]
+
+    #     output = task.process_results(doc, per_doc_results)
+
+    #     if task.save_examples:
+    #         metrics, example = output
+    #         preds.append(example["pred"])
+    #         if predictions_path:
+    #             correctness.append(int(example.get("correct", 0)))
+    #         example.update(fewshot_logging_info)
+    #         example.update(task.get_logging_info())
+    #         example_logger.info(json.dumps(example))
+    #     else:
+    #         metrics = output
+    #         example = fewshot_logging_info
+    #         example.update(task.get_logging_info())
+    #         example_logger.info(json.dumps(example))
+
+    #     for metric, value in metrics.items():
+    #         vals[(task_template_key, metric)].append(value)
+
+    # if predictions_path:
+    #     with open(predictions_path, 'w') as preds_file:
+    #         preds_file.write("index\tprediction\tcorrect\n")
+    #         for index, prediction in enumerate(preds):
+    #             prediction = prediction.replace("\n", "\\n")
+    #             correct = correctness[index] if index < len(correctness) else 0
+    #             preds_file.write(f"{index}\t{prediction}\t{correct}\n")
+
     # Unpack results and sort back in order and return control to Task
     if predictions_path:
         preds = []
+        correctness = []
+        token_distances = []
     vals = collections.defaultdict(list)
     example_logger = logging.getLogger("examples")
+
+    # Pass tokenizer to all tasks
+    #########################################################
+    if hasattr(model, 'tokenizer'):
+        for task_key in task_dict:
+            task_dict[task_key].tokenizer = model.tokenizer
+    #########################################################
+
     for (task_template_key, doc_id), per_doc_requests in process_response_queue.items():
-        #breakpoint()
         per_doc_requests.sort(key=lambda x: x[0])
         per_doc_results = [x[1] for x in per_doc_requests]
         fewshot_logging_info = [x[2] for x in per_doc_requests][0]
@@ -254,6 +312,9 @@ def evaluate(
         if task.save_examples:
             metrics, example = output
             preds.append(example["pred"])
+            if predictions_path:
+                correctness.append(int(example.get("correct", 0)))
+                token_distances.append(example.get("token_distance", -1))
             example.update(fewshot_logging_info)
             example.update(task.get_logging_info())
             example_logger.info(json.dumps(example))
@@ -268,11 +329,13 @@ def evaluate(
 
     if predictions_path:
         with open(predictions_path, 'w') as preds_file:
-            preds_file.write("index\tprediction\n")
+            preds_file.write("index\tprediction\tcorrect\ttoken_distance\n")
             for index, prediction in enumerate(preds):
                 prediction = prediction.replace("\n", "\\n")
-                preds_file.write(f"{index}\t{prediction}\n")
-    
+                correct = correctness[index] if index < len(correctness) else 0
+                token_dist = token_distances[index] if index < len(token_distances) else -1
+                preds_file.write(f"{index}\t{prediction}\t{correct}\t{token_dist}\n")
+
     # Aggregate results
     metric_results = []
     for (task_template_key, metric), items in vals.items():

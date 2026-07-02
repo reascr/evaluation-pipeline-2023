@@ -14,6 +14,8 @@ from lm_eval.api.task import PromptSourceTask
 from typing import Optional, List
 from datasets import load_dataset
 
+import string
+
 
 _CITATION = """
 @article{warstadt2019blimp,
@@ -60,6 +62,159 @@ class BlimpTask(PromptSourceTask):
     def null_prompt_answer_choices(self, doc: dict) -> List[str]:
         choices = [doc["sentence_good"], doc["sentence_bad"]]
         return choices
+
+
+    # def _calculate_token_distance(self, sentence: str, controller: str, target: str, tokenizer):
+    #     """Calculate token distance between controller and target using the tokenizer."""
+    #     try:
+    #         # Encode the full sentence
+    #         sentence_tokens = tokenizer.encode(sentence, add_special_tokens=False)
+    #         sentence_token_strings = tokenizer.convert_ids_to_tokens(sentence_tokens)
+            
+    #         controller_lower = controller.lower().strip()
+    #         target_lower = target.lower().strip()
+            
+    #         # Reconstruct words from token strings to handle subword tokens
+    #         current_word = ""
+    #         current_word_length = 0
+    #         current_word_start = 0  # Track where current word starts
+    #         word_list = []
+    #         word_start_indices = []
+    #         word_lengths = []
+            
+    #         for i, token_str in enumerate(sentence_token_strings):
+    #             if token_str.startswith("Ġ"):
+    #                 # Save previous word if it exists
+    #                 if current_word:
+    #                     word_list.append(current_word)
+    #                     word_start_indices.append(current_word_start)
+    #                     word_lengths.append(current_word_length)
+    #                 # Start new word
+    #                 current_word = token_str.replace("Ġ", "").lower()
+    #                 current_word_length = 1
+    #                 current_word_start = i  # Record start of this word
+    #             else:
+    #                 current_word += token_str.lower()
+    #                 current_word_length += 1
+            
+    #         # Don't forget the last word
+    #         if current_word:
+    #             word_list.append(current_word)
+    #             word_start_indices.append(current_word_start)
+    #             word_lengths.append(current_word_length)
+            
+    #         # Strip punctuation from words for matching
+    #         word_list_clean = [w.strip(string.punctuation) for w in word_list]
+            
+    #         # Find controller and target in word list
+    #         controller_words = controller_lower.split()
+    #         target_words = target_lower.split()
+            
+    #         # ===== Extract only the last word of multi-word controller =====
+    #         controller_search = controller_words[-1] if len(controller_words) > 0 else ""
+            
+    #         controller_end_idx = -1
+    #         target_idx = -1
+            
+    #         for i in range(len(word_list_clean)):
+    #             if word_list_clean[i] == controller_search:
+    #                 controller_end_idx = word_start_indices[i] + word_lengths[i]
+    #                 break
+    #         # ==========
+            
+    #         # Find multi-word target
+    #         for i in range(len(word_list_clean) - len(target_words) + 1):
+    #             if word_list_clean[i:i+len(target_words)] == target_words:
+    #                 target_idx = word_start_indices[i]
+    #                 break
+            
+    #         if controller_end_idx >= 0 and target_idx >= 0:
+    #             token_distance = abs(target_idx - controller_end_idx) + 1
+    #             return token_distance
+    #         else:
+    #             return -1
+    #     except Exception as e:
+    #         print(f"Error: {e}\n")
+    #         import traceback
+    #         traceback.print_exc()
+    #         return -1
+    #     ####################
+
+
+    import string
+    def _calculate_token_distance(self, sentence: str, controller: str, target: str, tokenizer):
+        """Calculate token distance between controller and target using the tokenizer."""
+        try:
+            # Encode the full sentence
+            sentence_tokens = tokenizer.encode(sentence, add_special_tokens=False)
+            sentence_token_strings = tokenizer.convert_ids_to_tokens(sentence_tokens)
+            
+            controller_lower = controller.lower().strip()
+            target_lower = target.lower().strip()
+            
+            # Reconstruct words from token strings to handle subword tokens
+            current_word = ""
+            current_word_length = 0
+            current_word_start = 0  # Track where current word starts
+            word_list = []
+            word_start_indices = []
+            word_lengths = []
+            
+            for i, token_str in enumerate(sentence_token_strings):
+                if token_str.startswith("Ġ"):
+                    # Save previous word if it exists
+                    if current_word:
+                        word_list.append(current_word)
+                        word_start_indices.append(current_word_start)
+                        word_lengths.append(current_word_length)
+                    # Start new word
+                    current_word = token_str.replace("Ġ", "").lower()
+                    current_word_length = 1
+                    current_word_start = i  # Record start of this word
+                else:
+                    current_word += token_str.lower()
+                    current_word_length += 1
+            
+            # Don't forget the last word
+            if current_word:
+                word_list.append(current_word)
+                word_start_indices.append(current_word_start)
+                word_lengths.append(current_word_length)
+            
+            # Strip punctuation from words for matching
+            word_list_clean = [w.strip(string.punctuation) for w in word_list]
+            
+            # Find controller and target in word list
+            controller_words = controller_lower.split()
+            target_words = target_lower.split()
+            
+            # ===== Extract only the last word of multi-word controller =====
+            controller_search = controller_words[-1] if len(controller_words) > 0 else ""
+            
+            controller_end_idx = -1
+            target_idx = -1
+            
+            for i in range(len(word_list_clean)):
+                if word_list_clean[i] == controller_search:
+                    controller_end_idx = word_start_indices[i] + word_lengths[i]
+            # ==========
+            
+            # Find the LAST occurrence of multi-word target
+            for i in range(len(word_list_clean) - len(target_words), -1, -1):
+                if word_list_clean[i:i+len(target_words)] == target_words:
+                    target_idx = word_start_indices[i]
+                    break
+            
+            if controller_end_idx >= 0 and target_idx >= 0:
+                token_distance = abs(target_idx - controller_end_idx) + 1
+                return token_distance
+            else:
+                return -1
+        except Exception as e:
+            print(f"Error: {e}\n")
+            import traceback
+            traceback.print_exc()
+            return -1
 
     def null_prompt_get_logging_info(self):
         return {

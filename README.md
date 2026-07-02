@@ -17,7 +17,7 @@ To install dependencies, run this:
 
 ```bash
 git clone https://github.com/babylm/evaluation-pipeline
-cd evaluation-pipeline
+cd evaluation_pipeline
 pip install -e ".[dev]"
 pip install torch==1.11.0+cu113 torchvision==0.12.0+cu113 torchaudio==0.11.0 --extra-index-url https://download.pytorch.org/whl/cu113
 ```

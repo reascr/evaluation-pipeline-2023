@@ -6,25 +6,51 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 
-dev_requires = (["black<=21.12b0", "coverage<=6.2", "mock>=4.0.3", "pytest",
+# dev_requires = (["black<=21.12b0", "coverage<=6.2", "mock>=4.0.3", "pytest",
+#                  "promptsource@git+https://github.com/bigscience-workshop/promptsource@eval-hackathon"],)
+# colab_requires = (["black<=21.12b0", "coverage<=6.2", "mock>=4.0.3", "pytest"])
+# install_requires = [
+#     "datasets>=2.0.0",
+#     "nltk==3.6",
+#     "openai==0.13.0",
+#     "pycountry==20.7.3",
+#     "pytablewriter==0.58.0",
+#     "rouge-score==0.0.4",
+#     "sacrebleu==1.5.0",
+#     "scikit-learn>=0.24.1",
+#     "sqlitedict==1.6.0",
+#     #"torch==1.11.0",
+#     "evaluate==0.4.0",
+#     "tqdm-multiprocess==0.0.11",
+#     "accelerate@git+https://github.com/huggingface/accelerate@main",
+#     "transformers==4.26.1",
+# ]
+
+
+#Changing dependencies without version numbers
+
+dev_requires = (["black", "coverage", "mock", "pytest",
                  "promptsource@git+https://github.com/bigscience-workshop/promptsource@eval-hackathon"],)
-colab_requires = (["black<=21.12b0", "coverage<=6.2", "mock>=4.0.3", "pytest"])
+colab_requires = (["black", "coverage", "mock", "pytest"])
 install_requires = [
-    "datasets>=2.0.0",
-    "nltk==3.6",
-    "openai==0.13.0",
-    "pycountry==20.7.3",
-    "pytablewriter==0.58.0",
-    "rouge-score==0.0.4",
-    "sacrebleu==1.5.0",
-    "scikit-learn>=0.24.1",
-    "sqlitedict==1.6.0",
-    "torch==1.11.0",
-    "evaluate==0.4.0",
-    "tqdm-multiprocess==0.0.11",
-    "accelerate@git+https://github.com/huggingface/accelerate@main",
-    "transformers==4.26.1",
+    "datasets",
+    "nltk",
+    "openai",
+    "pycountry",
+    "pytablewriter",
+    "rouge-score",
+    "sacrebleu",
+    "scikit-learn",
+    "sqlitedict",
+    "torch",
+    "evaluate",
+    "tqdm-multiprocess",
+    # "accelerate@git+https://github.com/huggingface/accelerate@main",
+    "accelerate==0.21.0",
+    "transformers",
 ]
+
+
 dependency_links = []
 
 
@@ -61,5 +87,5 @@ setup(
     install_requires=install_requires,
     dependency_links=dependency_links,
     extras_require={"dev": dev_requires, "colab": colab_requires},
-    cmdclass={"install": PostInstall},
+    #cmdclass={"install": PostInstall},
 )

@@ -629,7 +629,19 @@ class PromptSourceTask(Task):
                 "pred": pred,
                 "target": target,
                 "answer_choices_list": answer_choices_list,
+                "correct": pred == target,
             }
+            # Calculate token distance if available
+            ##################################################################################
+            if hasattr(self, '_calculate_token_distance') and hasattr(self, 'tokenizer'):
+                token_distance = self._calculate_token_distance(
+                    sentence=doc.get("sentence_good", ""),
+                    controller=doc.get("controller", ""),
+                    target=doc.get("target_good", ""),
+                    tokenizer=self.tokenizer
+                )
+                example["token_distance"] = token_distance
+            ##################################################################################
             return out, example
         return out
 

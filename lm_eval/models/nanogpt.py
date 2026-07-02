@@ -9,11 +9,16 @@ import os
 import torch
 import transformers
 import pickle
-from transformers import GPT2TokenizerFast, GPT2Tokenizer
+from transformers import GPT2TokenizerFast, GPT2Tokenizer, AutoTokenizer
+from huggingface_hub import login as hf_login
 
-NANOGPT_ROOT = str(Path(__file__).parents[4])
-sys.path.append(NANOGPT_ROOT)
-from model import GPT, GPTConfig
+# NANOGPT_ROOT = str(Path(__file__).parents[4])
+# sys.path.append(NANOGPT_ROOT)
+
+NANOGPT_ROOT = "/home/fleetprobe/fmt-analysis"
+TOKENIZER_ROOT = "/home/fleetprobe/fmt-analysis/data"
+sys.path.insert(0, NANOGPT_ROOT)
+from model_HF import GPT, GPTConfig
 
 
 class NanoGPTLM(TokenLM):
@@ -29,106 +34,87 @@ class NanoGPTLM(TokenLM):
     def __init__(
         self,
         out_dir: str = None,
-        data_dir:str = None,
+        data_dir: str = None,
+        model_name: str = None,
         batch_size: Optional[int] = 1,
         max_gen_toks: Optional[int] = 256,
         max_length: Optional[int] = None,
         add_special_tokens: Optional[bool] = None,
         device: Optional[Union[int, str]] = "cuda",
     ):
-        """Initializes a HuggingFace `AutoModel` and `AutoTokenizer` for evaluation.
-
-        Args:
-
-            dtype (Union[str, torch.dtype], optional, defaults to None):):
-                Converts the model weights to `dtype`, if specified. Strings get
-                converted to `torch.dtype` objects (e.g. `float16` -> `torch.float16`).
-                Use `dtype="auto"` to derive the type from the model’s weights.
-        """
         super().__init__()
         assert isinstance(device, str)
         assert isinstance(batch_size, int)
         assert batch_size == 1, "Batch size > 1 not supported yet"
 
-        self._batch_size = batch_size  # TODO: Adaptive batch size
-
-
+        self._batch_size = batch_size
         self._max_gen_toks = max_gen_toks
         self._max_length = max_length
+        self._device = device
 
-        ckpt_path = os.path.join(out_dir, 'ckpt.pt')
-        checkpoint = torch.load(ckpt_path, map_location=device)
+        hf_token = os.environ.get("HF_ACCESS_TOKEN")
+        if hf_token:
+            hf_login(token=hf_token)
 
-        #print("model args: ", checkpoint['model_args'])
+        HF_REPO_ROOT = "fmtmodels"
+        if model_name is None:
+            raise ValueError("model_name must be provided for HuggingFace loading.")
+        if data_dir is None:
+            raise ValueError("data_dir must be provided (e.g. babylm_full_bpe_8k).")
 
-        if "head_size_qkv" not in checkpoint['model_args']:
-            checkpoint['model_args']['head_size_qkv'] = checkpoint['model_args']['n_embd']
-
-        if "wm_decay_length" not in checkpoint['model_args']:
-            checkpoint['model_args']['wm_decay_length'] = checkpoint['model_args']['block_size']
-
-        if "ffw_dim" not in checkpoint['model_args']:
-            checkpoint['model_args']['ffw_dim'] = checkpoint['model_args']['n_embd'] * 4
-
-        self._config = GPTConfig(**checkpoint['model_args'])
-
-        #check and add new parameters that were added later
-
-        #print("Model config: ", self._config)
-        #breakpoint()
-        self.model = GPT(self._config)
-        state_dict = checkpoint['model']
-        unwanted_prefix = '_orig_mod.'
-        for k, v in list(state_dict.items()):
-            if k.startswith(unwanted_prefix):
-                state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-        self.model.load_state_dict(state_dict)
+        model_id = f"{HF_REPO_ROOT}/{model_name}"
+        self.model = GPT.from_pretrained(model_id, use_safetensors=False)
+        self.model.eval().to(self._device)
 
         self._add_special_tokens = add_special_tokens
+        self.tokenizer = self._create_auto_tokenizer(None, data_dir)
 
-        meta_path = os.path.join(data_dir, 'meta.pkl')
+        self._vocab_size = self.model.transformer.wte.weight.size(0)
+        self._block_size = self.model.transformer.wpe.weight.size(0)
 
-        self.tokenizer = self._create_auto_tokenizer(meta_path, data_dir)
-        self.tokenizer.model_max_length = self.max_length #This one is the property class max_length function
+        tok_vocab = getattr(self.tokenizer, "vocab_size", None) or len(self.tokenizer)
+        if tok_vocab != self._vocab_size:
+            raise ValueError(
+                f"Tokenizer/model vocab mismatch: tokenizer={tok_vocab}, model={self._vocab_size}."
+            )
 
-        self.model.eval()
+        self.tokenizer.model_max_length = (
+            self._block_size if self._max_length is None else min(self._max_length, self._block_size)
+        )
 
-        torch.set_grad_enabled(False)
+    def load_tokenizer(self, data_dir):
+        # Match notebook behavior:
+        # - if relative, resolve under TOKENIZER_ROOT
+        # - require meta.pkl + custom_tokenizer
+        tok_dir = data_dir if os.path.isabs(data_dir) else os.path.join(TOKENIZER_ROOT, data_dir)
+        meta_path = os.path.join(tok_dir, "meta.pkl")
 
-        self._device = device
-        self.model.to(self._device)
+        if not os.path.exists(meta_path):
+            raise NotImplementedError(f"No meta.pkl found at: {meta_path}")
 
+        with open(meta_path, "rb") as f:
+            meta = pickle.load(f)
+
+        if not meta.get("custom_tokenizer", False):
+            if meta.get("stoi", False):
+                raise NotImplementedError("stoi/itos not supported yet")
+            raise NotImplementedError("No custom tokenizer/stoi/itos found in meta.pkl")
+
+        tokenizer = AutoTokenizer.from_pretrained(tok_dir, use_fast=False, local_files_only=True)
+
+        if not tokenizer.eos_token:
+            tokenizer.add_special_tokens({"eos_token": "</s>"})
+        if not tokenizer.pad_token:
+            tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.padding_side = "left"
+        return tokenizer
 
     def _create_auto_tokenizer(
         self,
         meta_path: str,
         data_dir: str,
     ) -> transformers.PreTrainedTokenizer:
-        """Returns a pre-trained tokenizer from a pre-trained tokenizer configuration."""
-
-        load_meta = os.path.exists(meta_path)
-        if load_meta:
-            with open(meta_path, 'rb') as f:
-                meta = pickle.load(f)
-
-            if meta.get("custom_tokenizer", False):
-                tokenizer = transformers.AutoTokenizer.from_pretrained(data_dir, use_fast=False)
-            else:
-                if meta.get("stoi", False):
-                    raise NotImplementedError("stoi/itos not supported yet")
-                else:
-                    raise NotImplementedError("No stoi/itos found")
-        else:
-            tokenizer = GPT2Tokenizer.from_pretrained("openai-community/gpt2")
-            #raise NotImplementedError("No meta.pkl found, GPT-2 tiktoken support not implemented yet")
-
-        if not tokenizer.eos_token:
-            tokenizer.add_special_tokens({"eos_token": "</s>"})
-        if not tokenizer.pad_token:
-            tokenizer.pad_token = tokenizer.eos_token
-
-        tokenizer.padding_side = "left" #Add if needed?
-        return tokenizer
+        return self.load_tokenizer(data_dir)
 
     @property
     def add_special_tokens(self) -> bool:
@@ -170,13 +156,14 @@ class NanoGPTLM(TokenLM):
         if self._max_length is not None:
             return self._max_length
         # Try to get the sequence length from the model config.
-        seqlen_config_attrs = ("n_positions", "max_position_embeddings", "n_ctx", "block_size") #Add block_size because it is in the GPTConfig
-        for attr in seqlen_config_attrs:
-            if hasattr(self._config, attr):
-                return getattr(self._config, attr)
+        # seqlen_config_attrs = ("n_positions", "max_position_embeddings", "n_ctx", "block_size") #Add block_size because it is in the GPTConfig
+        # for attr in seqlen_config_attrs:
+        #     if hasattr(self._config, attr):
+        #         return getattr(self._config, attr)
         if hasattr(self.tokenizer, "model_max_length"):
             return self.tokenizer.model_max_length
         return self._DEFAULT_MAX_LENGTH
+
 
     @property
     def batch_size(self) -> int:
@@ -257,12 +244,38 @@ class NanoGPTLM(TokenLM):
     def _model_call(
         self, inputs: TokenSequence, labels: Optional[TokenSequence] = None
     ) -> TokenSequence:
-        #breakpoint()
-        #return self.model(inputs)["logits"]
-        logits, loss = self.model(inputs,inputs) #passing inputs twice because forward expects targets for running LM head on all outputs and not just the last one
-        #breakpoint()
-        return logits
+        # lm-eval may pass BatchEncoding or tensor
+        if isinstance(inputs, dict):
+            input_ids = inputs["input_ids"]
+        else:
+            input_ids = inputs
 
+        if input_ids.dim() == 1:
+            input_ids = input_ids.unsqueeze(0)
+
+        input_ids = input_ids.long()
+
+        # prevent position embedding OOB
+        if input_ids.size(1) > self._block_size:
+            input_ids = input_ids[:, -self._block_size:]
+
+        # fail fast on token OOB
+        min_id = int(input_ids.min().item())
+        max_id = int(input_ids.max().item())
+        if min_id < 0 or max_id >= self._vocab_size:
+            raise ValueError(
+                f"Token id out of range: min={min_id}, max={max_id}, vocab_size={self._vocab_size}. "
+                f"Likely tokenizer/model mismatch."
+            )
+
+        input_ids = input_ids.to(self.device)
+
+        with torch.no_grad():
+            out = self.model(input_ids, input_ids)
+        logits = out["logits"]  # model_HF forward returns dict-like output
+
+        return logits
+    
     def _model_generate(
         self,
         inputs: transformers.BatchEncoding,
