@@ -1,0 +1,51 @@
+#!/bin/bash
+#$ -N blimp-checkpoints
+#$ -cwd
+#$ -q cuda.q
+#$ -S /bin/bash
+#$ -o logs
+#$ -e logs
+#$ -t 1-10
+#$ -m bea
+
+module purge
+unset PYTHONHOME
+unset PYTHONPATH
+
+module load python/3.9.4
+module load gcc/11.4.0
+
+source /home/andsch1/.venvs/babylm-eval/bin/activate
+
+export PYTHONPATH=/usr/shared/apps/python/python-3.9.4/lib/python3.9:/usr/shared/apps/python/python-3.9.4/lib64/python3.9:/usr/shared/apps/python/python-3.9.4/lib64/python3.9/lib-dynload
+
+cd /home/andsch1/evaluation-pipeline-2023 || exit 1
+
+MODELS=(
+"out-babylm_100M_full_bpe_8k-6x6-mask_dev_pl6to1_r0.99954_em05-seed123-1788682727"
+"out-babylm_100M_full_bpe_8k-6x6-mask_dev_pl6to1_r0.99954_em05-seed1337-1788764641"
+"out-babylm_100M_full_bpe_8k-6x6-mask_dev_pl6to1_r0.99954_em05-seed42-1788682380"
+"out-babylm_100M_full_bpe_8k-6x6-mask_dev_pl6to1_r0.99954_em05-seed456-1788682913"
+"out-babylm_100M_full_bpe_8k-6x6-mask_dev_pl6to1_r0.99954_em05-seed789-1788683380"
+"out-babylm_100M_full_bpe_8k-6x6-mask_dev_pl6to1_r0.9999_em05-seed123-1787426408"
+"out-babylm_100M_full_bpe_8k-6x6-mask_dev_pl6to1_r0.9999_em05-seed1337-1787426273"
+"out-babylm_100M_full_bpe_8k-6x6-mask_dev_pl6to1_r0.9999_em05-seed42-1787319250"
+"out-babylm_100M_full_bpe_8k-6x6-mask_dev_pl6to1_r0.9999_em05-seed456-1787426511"
+"out-babylm_100M_full_bpe_8k-6x6-mask_dev_pl6to1_r0.9999_em05-seed789-1787426564"
+)
+
+MODEL_NAME="${MODELS[$((SGE_TASK_ID - 1))]}"
+MODEL_DIR="/home/andsch1/fmt-llm/output/${MODEL_NAME}"
+
+echo "Job $JOB_ID task $SGE_TASK_ID started at $(date)"
+echo "Running on $(hostname)"
+echo "Model: $MODEL_DIR"
+python --version
+
+python -u evaluate_several_checkpoints.py \
+    --model-dir "$MODEL_DIR"
+
+status=$?
+
+echo "Job $JOB_ID task $SGE_TASK_ID finished at $(date)"
+exit "$status"

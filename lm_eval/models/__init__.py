@@ -4,6 +4,7 @@ from typing import List, Mapping, Optional, Type
 import lm_eval.api.utils
 from lm_eval.api.model import LM
 
+'''
 from . import dummy
 from . import openai_completions
 from . import huggingface
@@ -19,8 +20,23 @@ MODEL_API_REGISTRY = {
     "openai": openai_completions.OpenAICompletionsLM,
     "dummy": dummy.DummyLM,
     "nanogpt": nanogpt.NanoGPTLM
-}
+}'''
 
+from . import dummy
+from . import openai_completions
+from . import huggingface
+#from . import nanogpt
+from . import nanogpt_dev_fm
+
+MODEL_API_REGISTRY = {
+    "hf-causal": huggingface.AutoCausalLM,
+    "hf-seq2seq": huggingface.AutoSeq2SeqLM,
+    "hf-mlm": huggingface.AutoMaskedLM,
+    "openai": openai_completions.OpenAICompletionsLM,
+    "dummy": dummy.DummyLM,
+    #"nanogpt": nanogpt.NanoGPTLM,
+    "nanogpt-dev-fm": nanogpt_dev_fm.NanoGPTDevFMLM,
+}
 
 def list_model_apis() -> List[str]:
     """Returns a list of all the model API names available for language model construction."""

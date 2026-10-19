@@ -1,0 +1,36 @@
+#!/bin/bash
+#$ -N blimp-checkpoints
+#$ -cwd
+#$ -q cuda.q
+#$ -S /bin/bash
+#$ -o logs
+#$ -e logs
+#$ -M YOUR_MPI_EMAIL
+#$ -m bea
+
+# Clean module environment
+module purge
+unset PYTHONHOME
+unset PYTHONPATH
+
+# Python / compiler
+module load python/3.9.4
+module load gcc/11.4.0
+
+# Activate BabyLM evaluation environment
+source /home/andsch1/.venvs/babylm-eval/bin/activate
+
+# Required on the compute nodes for the cluster Python installation
+export PYTHONPATH=/usr/shared/apps/python/python-3.9.4/lib/python3.9:/usr/shared/apps/python/python-3.9.4/lib64/python3.9:/usr/shared/apps/python/python-3.9.4/lib64/python3.9/lib-dynload
+
+# Go to evaluation repository
+cd /home/andsch1/evaluation-pipeline-2023
+
+echo "Job $JOB_ID started at $(date)"
+echo "Running on $(hostname)"
+python --version
+
+# Run all checkpoint evaluations
+python -u evaluate_checkpoints.py
+
+echo "Job $JOB_ID finished at $(date)"

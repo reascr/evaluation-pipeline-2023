@@ -108,7 +108,7 @@ if __name__ == "__main__":
                         help="Path to huggingface model and tokenizer.")
     parser.add_argument("--model_type", type=str,
                         choices=["decoder only", "decoder", "encoder only",
-                                 "encoder", "encoder-decoder","nanogpt"],
+                                 "encoder", "encoder-decoder","nanogpt", "nanogpt-dev-fm" ],
                         help="Language model architecture.")
 
     parser.add_argument("--output_dir", "-o", type=str, default=".",
@@ -126,17 +126,28 @@ if __name__ == "__main__":
                         help="Trust remote code (e.g. from huggingface) when loading model.")
     parser.add_argument("--num_fewshot", "-n", type=int, default=0,
                         help="Number of few-shot examples to show the model for each test example.")
+
+    parser.add_argument(
+        "--checkpoint_name",
+        type=str,
+        default="ckpt.pt",
+        help="Checkpoint file inside output_dir."
+        )   
     args = parser.parse_args()
+
+   
 
     MODEL_TYPE_REMAP = {"decoder only": "hf-causal", "decoder": "hf-causal",
                         "encoder only": "hf-mlm", "encoder": "hf-mlm",
                         "encoder-decoder": "hf-seq2seq",
-                        "nanogpt": "nanogpt"}
+                        "nanogpt": "nanogpt", "nanogpt-dev-fm": "nanogpt-dev-fm"}
 
-    if args.model_type == "nanogpt":
+    # if args.model_type == "nanogpt":
+    if args.model_type in ["nanogpt", "nanogpt-dev-fm"]:
         eval_model = lm_eval.get_model(MODEL_TYPE_REMAP[args.model_type],
                                        out_dir = args.output_dir,
                                        data_dir = args.data_dir,
+                                       checkpoint_name=args.checkpoint_name,
                                        model_name = args.model_name, # added
                                        device="cuda")
     else:
